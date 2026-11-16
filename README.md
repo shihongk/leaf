@@ -26,7 +26,7 @@ To update later, run `git pull && ./build.sh`.
 
 ## Math
 
-Put `#math` on its own line (`# math` with a space works too). Everything below it (until `#endmath` or the end of the file) is calculated. A fenced code block with the language `math` works too. Nothing else in a document is ever calculated.
+Put `#math` on its own line (`# math` with a space works too). Everything below it (until `#endmath` / `#end-math` or the end of the file) is calculated. A fenced code block with the language `math` works too. Nothing else in a document is ever calculated.
 
 ```
 #math

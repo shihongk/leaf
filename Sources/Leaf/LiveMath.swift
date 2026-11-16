@@ -3,6 +3,18 @@ import JavaScriptCore
 
 /// Computes math answers for the editor with the same JavaScript engine the reading view uses
 /// (bundled math.js + leafmath.js), in a JavaScriptCore context on a private serial queue.
+struct LiveAnswer: Equatable {
+    var text: String
+    /// The typed line has no trailing "=": the editor draws a ghost "=" before the pill.
+    var implicitEq: Bool
+}
+
+struct LiveMathResult {
+    var answers: [Int: LiveAnswer] = [:]
+    /// 0-based lines of the real #math / end-marker lines (as decided by the JS engine).
+    var markers: [Int] = []
+}
+
 final class LiveMathEngine {
     static let shared = LiveMathEngine()
 
@@ -11,7 +23,7 @@ final class LiveMathEngine {
     private var loadFailed = false
 
     /// Answers keyed by 0-based source line (text split on "\n"). Calls back on the main queue.
-    func answers(for text: String, rates: [String: Any]?, completion: @escaping ([Int: String]) -> Void) {
+    func answers(for text: String, rates: [String: Any]?, completion: @escaping (LiveMathResult) -> Void) {
         let ratesJSON: String = {
             guard let rates, let data = try? JSONSerialization.data(withJSONObject: rates) else { return "null" }
             return String(decoding: data, as: UTF8.self)
@@ -22,13 +34,18 @@ final class LiveMathEngine {
         }
     }
 
-    private func compute(text: String, ratesJSON: String) -> [Int: String] {
-        guard let ctx = loadContext(), let fn = ctx.objectForKeyedSubscript("leafLiveAnswers") else { return [:] }
-        guard let value = fn.call(withArguments: [text, ratesJSON]), let rows = value.toArray() else { return [:] }
-        var out: [Int: String] = [:]
-        for case let row as [Any] in rows where row.count == 2 {
-            if let line = (row[0] as? NSNumber)?.intValue, let answer = row[1] as? String { out[line] = answer }
+    private func compute(text: String, ratesJSON: String) -> LiveMathResult {
+        guard let ctx = loadContext(), let fn = ctx.objectForKeyedSubscript("leafLiveAnswers") else { return LiveMathResult() }
+        guard let value = fn.call(withArguments: [text, ratesJSON]), let json = value.toString(),
+              let obj = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        else { return LiveMathResult() }
+        var out = LiveMathResult()
+        for case let row as [Any] in (obj["answers"] as? [Any]) ?? [] where row.count == 3 {
+            if let line = (row[0] as? NSNumber)?.intValue, let answer = row[1] as? String {
+                out.answers[line] = LiveAnswer(text: answer, implicitEq: (row[2] as? NSNumber)?.boolValue ?? false)
+            }
         }
+        out.markers = ((obj["markers"] as? [Any]) ?? []).compactMap { ($0 as? NSNumber)?.intValue }
         return out
     }
 
@@ -60,7 +77,10 @@ final class LiveMathEngine {
               engine = LeafMath.createEngine(math, JSON.parse(ratesJSON));
               key = ratesJSON;
             }
-            return LeafMath.documentAnswers(engine, text).map(function (a) { return [a.line, a.answer]; });
+            return JSON.stringify({
+              answers: LeafMath.documentAnswers(engine, text).map(function (a) { return [a.line, a.answer, !!a.implicitEq]; }),
+              markers: LeafMath.documentMarkers(text)
+            });
           };
         })();
         """)
@@ -79,7 +99,9 @@ final class LiveMathEngine {
 /// so they can't be saved, copied, selected or undone.
 final class LeafTextView: NSTextView, NSTextStorageDelegate {
     /// Current answers by 0-based source line.
-    private(set) var liveAnswers: [Int: String] = [:]
+    private(set) var liveAnswers: [Int: LiveAnswer] = [:]
+    /// 0-based marker lines (#math / end marker) currently accented.
+    private(set) var markerLines: [Int] = []
     /// Rates passed to the math engine (same payload the reading view gets).
     var ratesProvider: () -> [String: Any]? = { nil }
 
@@ -122,7 +144,7 @@ final class LeafTextView: NSTextView, NSTextStorageDelegate {
         if lineDelta != 0 && !liveAnswers.isEmpty {
             // Keep existing pills on their lines until the fresh answers arrive.
             let startLine = Self.lineIndex(of: editedRange.location, in: lineStarts())
-            var shifted: [Int: String] = [:]
+            var shifted: [Int: LiveAnswer] = [:]
             for (line, answer) in liveAnswers {
                 if line < startLine { shifted[line] = answer }
                 else if line == startLine { continue }
@@ -146,19 +168,64 @@ final class LeafTextView: NSTextView, NSTextStorageDelegate {
         generation += 1
         let gen = generation
         let text = string
-        LiveMathEngine.shared.answers(for: text, rates: ratesProvider()) { [weak self] answers in
+        LiveMathEngine.shared.answers(for: text, rates: ratesProvider()) { [weak self] result in
             guard let self, gen == self.generation, text == self.string else { return }
-            self.apply(answers)
+            self.apply(result)
         }
     }
 
-    private func apply(_ answers: [Int: String]) {
-        guard answers != liveAnswers else { return }
-        let changed = Set(answers.keys).union(liveAnswers.keys).filter { answers[$0] != liveAnswers[$0] }
-        let old = changed.compactMap { pillRect(line: $0, answer: liveAnswers[$0]) }
-        liveAnswers = answers
-        let new = changed.compactMap { pillRect(line: $0, answer: answers[$0]) }
-        for r in old + new { setNeedsDisplay(r.insetBy(dx: -2, dy: -2)) }
+    private func apply(_ result: LiveMathResult) {
+        let answers = result.answers
+        if answers != liveAnswers {
+            let changed = Set(answers.keys).union(liveAnswers.keys).filter { answers[$0] != liveAnswers[$0] }
+            let old = changed.compactMap { invalidationRect(line: $0, answer: liveAnswers[$0]) }
+            liveAnswers = answers
+            let new = changed.compactMap { invalidationRect(line: $0, answer: answers[$0]) }
+            for r in old + new { setNeedsDisplay(r.insetBy(dx: -2, dy: -2)) }
+        }
+        markerLines = result.markers
+        applyMarkerAccent()
+    }
+
+    // MARK: Marker accent
+
+    private static let markerColor = NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0x56 / 255, green: 0xc8 / 255, blue: 0x73 / 255, alpha: 1)
+            : NSColor(srgbRed: 0x1f / 255, green: 0x7a / 255, blue: 0x37 / 255, alpha: 1)
+    }
+
+    /// Colours the #math / end-marker lines with layout-manager temporary attributes only: the
+    /// text storage (saved content, undo stack) is never touched.
+    private func applyMarkerAccent() {
+        guard let lm = layoutManager else { return }
+        let s = string as NSString
+        lm.removeTemporaryAttribute(.foregroundColor, forCharacterRange: NSRange(location: 0, length: s.length))
+        let starts = lineStarts()
+        for line in markerLines where line >= 0 && line < starts.count {
+            let start = starts[line]
+            var end = line + 1 < starts.count ? starts[line + 1] - 1 : s.length
+            if end > start, s.character(at: end - 1) == 13 { end -= 1 }
+            guard end > start else { continue }
+            lm.addTemporaryAttribute(.foregroundColor, value: Self.markerColor,
+                                     forCharacterRange: NSRange(location: start, length: end - start))
+        }
+        needsDisplay = true
+    }
+
+    /// 0-based lines whose text currently carries the marker accent (for the debug state).
+    var accentedLines: [Int] {
+        guard let lm = layoutManager else { return [] }
+        let starts = lineStarts()
+        return markerLines.filter { line in
+            line >= 0 && line < starts.count && starts[line] < (string as NSString).length
+                && lm.temporaryAttribute(.foregroundColor, atCharacterIndex: starts[line], effectiveRange: nil) != nil
+        }.sorted()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyMarkerAccent()
     }
 
     // MARK: Geometry
@@ -218,8 +285,21 @@ final class LeafTextView: NSTextView, NSTextStorageDelegate {
     }
 
     /// Where the pill for `line` goes: just after the last visual fragment of that line.
-    private func pillRect(line: Int, answer: String?) -> NSRect? {
-        guard let answer, let lm = layoutManager else { return nil }
+    private var eqAttributes: [NSAttributedString.Key: Any] {
+        [.font: font ?? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+         .foregroundColor: NSColor.secondaryLabelColor]
+    }
+    private var eqWidth: CGFloat { ceil((" =" as NSString).size(withAttributes: eqAttributes).width) }
+
+    /// Area to redraw for a line's ghost "=" plus pill.
+    private func invalidationRect(line: Int, answer: LiveAnswer?) -> NSRect? {
+        guard let answer, let r = pillRect(line: line, answer: answer) else { return nil }
+        return answer.implicitEq ? r.insetBy(dx: -(eqWidth + 8), dy: 0).offsetBy(dx: -(eqWidth + 8) / 2, dy: 0) : r
+    }
+
+    private func pillRect(line: Int, answer liveAnswer: LiveAnswer?) -> NSRect? {
+        guard let liveAnswer, let lm = layoutManager else { return nil }
+        let answer = liveAnswer.text
         let starts = lineStarts()
         guard line >= 0, line < starts.count else { return nil }
         let s = string as NSString
@@ -239,7 +319,8 @@ final class LeafTextView: NSTextView, NSTextStorageDelegate {
         let h = ceil(size.height) + 2
         let gap: CGFloat = 8
         let midY = frag.midY + origin.y
-        return NSRect(x: ceil(used.maxX + gap), y: floor(midY - h / 2),
+        let eqShift = liveAnswer.implicitEq ? eqWidth : 0
+        return NSRect(x: ceil(used.maxX + gap + eqShift), y: floor(midY - h / 2),
                       width: ceil(size.width) + padX * 2, height: h)
     }
 
@@ -251,15 +332,22 @@ final class LeafTextView: NSTextView, NSTextStorageDelegate {
         let attrs = pillAttributes()
         NSGraphicsContext.saveGraphicsState()
         for (line, answer) in liveAnswers {
-            guard let r = pillRect(line: line, answer: answer), r.intersects(dirtyRect) else { continue }
+            guard let r = pillRect(line: line, answer: answer),
+                  r.insetBy(dx: answer.implicitEq ? -(eqWidth + 8) : 0, dy: 0).intersects(dirtyRect) else { continue }
+            if answer.implicitEq {
+                // Ghost "=": drawn only, in the text font and secondary colour; never in the text storage.
+                let eq = " =" as NSString
+                let esize = eq.size(withAttributes: eqAttributes)
+                eq.draw(at: NSPoint(x: r.minX - 8 - eqWidth, y: r.midY - esize.height / 2), withAttributes: eqAttributes)
+            }
             let path = NSBezierPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), xRadius: r.height / 2, yRadius: r.height / 2)
             Self.pillBG.setFill()
             path.fill()
             Self.pillBorder.setStroke()
             path.lineWidth = 1
             path.stroke()
-            let size = (answer as NSString).size(withAttributes: attrs)
-            (answer as NSString).draw(at: NSPoint(x: r.minX + 6, y: r.midY - size.height / 2), withAttributes: attrs)
+            let size = (answer.text as NSString).size(withAttributes: attrs)
+            (answer.text as NSString).draw(at: NSPoint(x: r.minX + 6, y: r.midY - size.height / 2), withAttributes: attrs)
         }
         NSGraphicsContext.restoreGraphicsState()
     }

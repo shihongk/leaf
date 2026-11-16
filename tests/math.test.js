@@ -183,5 +183,45 @@ test('documentAnswers: CRLF line endings', () => {
   assert.deepStrictEqual(docAnswers('#math\r\n1 + 2 =\r\n'), [{ line: 1, answer: '3' }]);
 });
 
+// --- Implicit "=" flag ---
+test('implicitEq: set when the line has no typed =', () => {
+  const l = withRates.evaluateRegion(['12 + 8', '12 + 8 =', 'rent: 1800', 'rent * 12']).lines;
+  assert.strictEqual(l[0].implicitEq, true);
+  assert.ok(!l[1].implicitEq);
+  assert.ok(!l[2].implicitEq && l[2].answer === null);
+  assert.strictEqual(l[3].implicitEq, true);
+});
+test('implicitEq in documentAnswers', () => {
+  assert.deepStrictEqual(docAnswers('# math\nrent: 1800\nrent * 12\n12 + 8 =\n#end-math\n5 + 5\n'),
+    [{ line: 2, answer: '21,600', implicitEq: true }, { line: 3, answer: '20' }]);
+});
+// --- Marker lines ---
+const markers = t => LeafMath.documentMarkers(t);
+test('documentMarkers: start and end lines', () => {
+  assert.deepStrictEqual(markers('hi\n# math\n1 + 1\n#endmath\nx'), [1, 3]);
+});
+test('documentMarkers: unclosed region has only a start marker', () => {
+  assert.deepStrictEqual(markers('#math\n1 + 1'), [0]);
+});
+test('documentMarkers: not in code fences, not headings', () => {
+  assert.deepStrictEqual(markers('```\n#math\n#endmath\n```\n# Maths notes\n## math\n```math\n1 + 1\n```'), []);
+});
+// --- End marker spellings ---
+test('end marker spellings all close the region', () => {
+  ['#endmath', '# endmath', '#end-math', '# end-math', '#end math', '# end math', '#END-MATH', '  #End Math  '].forEach(e => {
+    const a = docAnswers('#math\n1 + 1 =\n' + e + '\n2 + 2 =');
+    assert.deepStrictEqual(a, [{ line: 1, answer: '2' }], e);
+    assert.deepStrictEqual(markers('#math\n1 + 1 =\n' + e + '\n2 + 2 ='), [0, 2], e);
+  });
+});
+test('non-end spellings do not close the region', () => {
+  assert.strictEqual(docAnswers('#math\n#end-maths\n2 + 2 =').length, 1);
+  assert.strictEqual(docAnswers('#math\n#endmath2\n2 + 2 =').length, 1);
+});
+test('extractRegions honours new end markers', () => {
+  const r = LeafMath.extractRegions('a\n#math\n1 + 1 =\n#end-math\nb', k => 'P' + k);
+  assert.strictEqual(r.source, 'a\n\nP0\n\nb');
+});
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

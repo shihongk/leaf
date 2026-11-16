@@ -436,7 +436,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
             "zoom": Double(webView.pageZoom),
             "editorScrollY": Double(editScroll.contentView.bounds.origin.y),
             // Live editor answers, keyed by 1-based line number.
-            "liveAnswers": Dictionary(uniqueKeysWithValues: textView.liveAnswers.map { (String($0.key + 1), $0.value) }),
+            "liveAnswers": Dictionary(uniqueKeysWithValues: textView.liveAnswers.map { (String($0.key + 1), $0.value.text) }),
+            // 1-based lines whose answer has the auto-shown ghost "=".
+            "implicitEqLines": textView.liveAnswers.filter { $0.value.implicitEq }.keys.map { $0 + 1 }.sorted(),
+            // 1-based marker lines (#math / end marker) and those actually carrying the accent.
+            "markerLines": textView.markerLines.map { $0 + 1 }.sorted(),
+            "accentedLines": textView.accentedLines.map { $0 + 1 },
         ]
     }
 }

@@ -235,7 +235,8 @@
         ansCodes = res.codes;
         if (!res.usesTotal) block.push({ value: res.value, codes: res.codes });
         define(name, res);
-        return { text: line, kind: 'answer', answer: res.shown };
+        // implicitEq: the line had no typed trailing "="; views show a ghost "=" before the answer.
+        return { text: line, kind: 'answer', answer: res.shown, implicitEq: !wantsAnswer };
       });
 
       return { lines: out, usedCurrency: usedCurrency, ratesDate: ratesDate };
@@ -250,9 +251,13 @@
    * itself a math region. Calls onLine(i, line, inFence) for every line outside #math regions
    * and onRegion(kind, start, lines, end) for each region, where `start` is the source line
    * index of the region's first content line and `end` the index of its last source line
-   * (the #endmath / closing fence, or the last line of the file).
+   * (the end marker / closing fence, or the last line of the file). onMarker(i) is called for
+   * every real #math start marker and end marker line (never for fences or code).
    */
-  function scan(lines, onRegion, onLine) {
+  var START_RE = /^#\s*math$/i;
+  var END_RE = /^#\s*end[-\s]?math$/i; // #endmath, # endmath, #end-math, # end math, ...
+
+  function scan(lines, onRegion, onLine, onMarker) {
     var fence = null;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
@@ -272,11 +277,13 @@
         if (onLine) onLine(i, line, true);
         continue;
       }
-      if (/^#\s*math$/i.test(line.trim())) {
+      if (START_RE.test(line.trim())) {
+        if (onMarker) onMarker(i);
         var j = i + 1;
-        while (j < lines.length && !/^#\s*endmath$/i.test(lines[j].trim())) j++;
+        while (j < lines.length && !END_RE.test(lines[j].trim())) j++;
+        if (j < lines.length && onMarker) onMarker(j);
         onRegion('math', i + 1, lines.slice(i + 1, j), Math.min(j, lines.length - 1));
-        i = j; // skip the #endmath line too (or run to EOF)
+        i = j; // skip the end-marker line too (or run to EOF)
         continue;
       }
       if (onLine) onLine(i, line, false);
@@ -311,13 +318,25 @@
       var res;
       try { res = engine.evaluateRegion(lines); } catch (e) { return; }
       res.lines.forEach(function (l, k) {
-        if (l.answer !== null && l.answer !== undefined) out.push({ line: start + k, answer: l.answer });
+        if (l.answer !== null && l.answer !== undefined) {
+          var row = { line: start + k, answer: l.answer };
+          if (l.implicitEq) row.implicitEq = true;
+          out.push(row);
+        }
       });
     });
     return out;
   }
 
+  /** 0-based indices of the lines that really switch math on/off (#math and its end marker). */
+  function documentMarkers(text) {
+    var out = [];
+    scan(String(text).split('\n'), function () {}, null, function (i) { out.push(i); });
+    return out;
+  }
+
   return {
+    documentMarkers: documentMarkers,
     createEngine: createEngine,
     extractRegions: extractRegions,
     documentAnswers: documentAnswers,

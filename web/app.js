@@ -100,10 +100,12 @@
       if (l.answer !== null && l.answer !== undefined) {
         // Keep the "=" and the pill together on one line.
         var text = l.text.replace(/\s+$/, '');
-        var cut = text.search(/\S*\s*=$/);
+        var cut = l.implicitEq ? text.search(/\S*$/) : text.search(/\S*\s*=$/);
         if (cut < 0) cut = text.length;
+        // An auto-shown "=" (line typed without one) is display-only, drawn by CSS.
+        var eq = l.implicitEq ? '<span class="math-eq"></span>' : '';
         html += '<div class="' + cls + ' has-answer">' + escapeHTML(text.slice(0, cut)) +
-          '<span class="math-tail">' + escapeHTML(text.slice(cut)) +
+          '<span class="math-tail">' + escapeHTML(text.slice(cut)) + eq +
           '<span class="math-ans">' + escapeHTML(l.answer) + '</span></span></div>';
       } else {
         var shown = l.kind === 'heading' ? l.text.replace(/^\s*#{1,6}\s+/, '') : l.text;

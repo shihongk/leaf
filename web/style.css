@@ -167,6 +167,8 @@ body.wrap-code .markdown-body pre { white-space: pre-wrap; overflow-wrap: anywhe
 .markdown-body .math-line.math-heading { font-weight: 600; }
 .markdown-body .math-line.math-comment { color: var(--muted); }
 .markdown-body .math-tail { white-space: nowrap; }
+.markdown-body .math-eq { color: var(--muted); }
+.markdown-body .math-eq::before { content: " ="; white-space: pre; }
 .markdown-body .math-ans {
   display: inline-block;
   white-space: nowrap;
