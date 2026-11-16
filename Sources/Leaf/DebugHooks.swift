@@ -19,6 +19,7 @@ enum DebugHooks {
     }
 
     private static func run(_ cmd: String) {
+        if cmd == "settings" { (NSApp.delegate as? AppDelegate)?.showSettings(nil); return }
         guard let c = front else { return }
         if cmd.hasPrefix("insert:") {
             c.debugInsert(String(cmd.dropFirst("insert:".count)))
