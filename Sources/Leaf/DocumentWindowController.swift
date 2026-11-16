@@ -413,4 +413,27 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
             if !result.matchFound { NSSound.beep() }
         }
     }
+
+    // MARK: Debug (LEAF_DEBUG=1 only)
+
+    func debugInsert(_ text: String) {
+        guard isEditing else { return }
+        window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        textView.insertText(text, replacementRange: textView.selectedRange())
+        doc?.undoManager?.endUndoGrouping() // close the typing group like the run loop would
+        doc?.undoManager?.beginUndoGrouping()
+    }
+
+    func debugState() -> [String: Any] {
+        [
+            "editing": isEditing,
+            "dirty": doc?.isDocumentEdited ?? false,
+            "conflictVisible": !conflictBar.isHidden,
+            "textLength": (doc?.text as NSString?)?.length ?? 0,
+            "editorTextLength": (textView.string as NSString).length,
+            "zoom": Double(webView.pageZoom),
+            "editorScrollY": Double(editScroll.contentView.bounds.origin.y),
+        ]
+    }
 }

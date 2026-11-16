@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
         NSApp.mainMenu = MainMenu.build()
@@ -8,12 +8,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         RatesManager.shared.start()
+        DebugHooks.install()
     }
 
     // Leaf is a reader: never open an empty untitled document on launch.
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    // Fallbacks when no document window is key (e.g. app in background): act on the
+    // front-most document window.
+    private var frontController: DocumentWindowController? {
+        NSApp.orderedWindows.lazy.compactMap { $0.windowController as? DocumentWindowController }.first
+    }
+    @objc func toggleEditMode(_ sender: Any?) { frontController?.toggleEditMode(sender) }
+    @objc func zoomIn(_ sender: Any?) { frontController?.zoomIn(sender) }
+    @objc func zoomOut(_ sender: Any?) { frontController?.zoomOut(sender) }
+    @objc func zoomActualSize(_ sender: Any?) { frontController?.zoomActualSize(sender) }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        switch item.action {
+        case #selector(toggleEditMode(_:)), #selector(zoomIn(_:)), #selector(zoomOut(_:)), #selector(zoomActualSize(_:)):
+            return frontController != nil
+        default:
+            return true
+        }
+    }
 
     @objc func showSettings(_ sender: Any?) {
         SettingsWindowController.shared.showWindow(sender)
