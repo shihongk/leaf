@@ -31,6 +31,40 @@ final class MarkdownDocument: NSDocument {
         didSet { if oldValue != fileURL { startWatching() } }
     }
 
+    // MARK: Task list checkboxes
+
+    /// Flips the `[ ]` / `[x]` marker of the task item on 0-based source `line`. Undoable.
+    /// Returns false if that line has no task marker.
+    @discardableResult
+    func toggleTask(atLine line: Int) -> Bool {
+        var lines = text.components(separatedBy: "\n")
+        guard line >= 0, line < lines.count,
+              let re = try? NSRegularExpression(pattern: #"^(\s*(?:>\s*)*(?:[-*+]|\d{1,9}[.)])\s+\[)([ xX])(\])"#),
+              let m = re.firstMatch(in: lines[line], range: NSRange(location: 0, length: (lines[line] as NSString).length)),
+              m.numberOfRanges == 4 else { return false }
+        let flag = (lines[line] as NSString).substring(with: m.range(at: 2))
+        lines[line] = (lines[line] as NSString).replacingCharacters(in: m.range(at: 2), with: flag == " " ? "x" : " ")
+        setTextUndoable(lines.joined(separator: "\n"), actionName: "Toggle Checkbox")
+        return true
+    }
+
+    /// Replaces the text through the undo manager (which also marks the document edited)
+    /// and refreshes the views. Disk is untouched, so the file watcher sees nothing.
+    func setTextUndoable(_ new: String, actionName: String) {
+        let old = text
+        guard old != new else { return }
+        undoManager?.registerUndo(withTarget: self) { $0.setTextUndoable(old, actionName: actionName) }
+        undoManager?.setActionName(actionName)
+        if let um = undoManager, !um.isUndoing, !um.isRedoing, um.groupingLevel > 0 {
+            // Close the group now so the document is marked edited immediately instead of
+            // whenever the run loop gets round to it (same as a typing edit).
+            um.endUndoGrouping()
+            um.beginUndoGrouping()
+        }
+        text = new
+        windowController?.documentTextReplaced()
+    }
+
     // MARK: Reading and writing
 
     override func read(from data: Data, ofType typeName: String) throws {

@@ -4,6 +4,9 @@ A small, fast Markdown reader for macOS. Open a `.md` file and see it properly f
 
 - GitHub-style reading view, automatic light/dark, syntax-highlighted code, tables, task lists
 - `Cmd+N` starts a blank note, `Cmd+E` toggles a plain-text editor, `Cmd+S` saves
+- An Edit / Read button in the title bar switches modes (same as `Cmd+E`)
+- Double-click the reading view to start editing at the same place
+- Click a task-list checkbox to tick or untick it in the file
 - Reloads automatically when the file changes on disk
 - Raw HTML and scripts in files are never run
 - Works offline (all libraries are bundled)

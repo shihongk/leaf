@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextViewDelegate, NSSearchFieldDelegate {
+final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextViewDelegate, NSSearchFieldDelegate, NSToolbarDelegate {
     private var webView: WKWebView!
     private var editScroll: NSScrollView!
     private var textView: LeafTextView!
@@ -11,7 +11,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
 
     private var pageLoaded = false
     private var renderPending = false
-    private(set) var isEditing = false
+    private(set) var isEditing = false { didSet { updateToggleButton() } }
+    private var toggleItem: NSToolbarItem?
+    private static let toggleItemID = NSToolbarItem.Identifier("local.leaf.toggleEdit")
     private var editStartScroll: CGFloat = 0
     private var observers: [NSObjectProtocol] = []
 
@@ -30,6 +32,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         window.delegate = self
         shouldCascadeWindows = true
         buildViews()
+        installToolbar()
         window.center()
 
         let nc = NotificationCenter.default
@@ -59,6 +62,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         config.suppressesIncrementalRendering = false
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.setURLSchemeHandler(LocalFileSchemeHandler(), forURLScheme: LocalFileSchemeHandler.scheme)
+        // The page's own app.js is the only sender (document HTML is escaped, html:false).
+        config.userContentController.add(ScriptHandler(owner: self), name: "leaf")
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -202,6 +207,78 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         let done = NSButton(title: "Done", target: self, action: #selector(closeFindBar(_:)))
         done.controlSize = .small
         return makeBar([spacer, findField, done])
+    }
+
+    // MARK: Toolbar (Edit / Read button)
+
+    private func installToolbar() {
+        let toolbar = NSToolbar(identifier: "LeafDocumentToolbar")
+        toolbar.delegate = self
+        toolbar.displayMode = .iconAndLabel
+        toolbar.allowsUserCustomization = false
+        toolbar.autosavesConfiguration = false
+        window?.toolbar = toolbar
+        updateToggleButton()
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, Self.toggleItemID]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, Self.toggleItemID]
+    }
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        guard itemIdentifier == Self.toggleItemID else { return nil }
+        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+        item.target = self
+        item.action = #selector(toggleEditMode(_:))
+        item.isBordered = true
+        toggleItem = item
+        updateToggleButton()
+        return item
+    }
+
+    /// Shows "Edit" in the reading view and "Read" in the editor.
+    private func updateToggleButton() {
+        guard let item = toggleItem else { return }
+        let title = isEditing ? "Read" : "Edit"
+        item.label = title
+        item.paletteLabel = title
+        item.toolTip = isEditing ? "Show the formatted view (Cmd+E)" : "Edit the text (Cmd+E)"
+        item.image = NSImage(systemSymbolName: isEditing ? "doc.text" : "square.and.pencil",
+                             accessibilityDescription: title)
+    }
+
+    var toggleButtonTitle: String { toggleItem?.label ?? "" }
+
+    // MARK: Messages from the reading view
+
+    /// Weak forwarder so the web view's content controller does not retain the window controller.
+    private final class ScriptHandler: NSObject, WKScriptMessageHandler {
+        weak var owner: DocumentWindowController?
+        init(owner: DocumentWindowController) { self.owner = owner }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.frameInfo.isMainFrame, let body = message.body as? [String: Any],
+                  let type = body["type"] as? String else { return }
+            switch type {
+            case "dblclick": owner?.handleDoubleClick()
+            case "toggleTask":
+                if let line = body["line"] as? Int { owner?.handleToggleTask(line: line) }
+            default: break
+            }
+        }
+    }
+
+    fileprivate func handleDoubleClick() {
+        if !isEditing { toggleEditMode(nil) }
+    }
+
+    fileprivate func handleToggleTask(line: Int) {
+        guard let doc, !isEditing else { return }
+        if !doc.toggleTask(atLine: line) { NSSound.beep(); render() }
     }
 
     // MARK: Rendering
@@ -436,8 +513,21 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         doc?.undoManager?.beginUndoGrouping()
     }
 
+    func debugClickCheckbox(_ n: Int) {
+        guard !isEditing else { return }
+        // A real DOM click, so it travels through app.js and the script message handler.
+        webView.evaluateJavaScript("(function(){var b=document.querySelectorAll('input.task-list-item-checkbox')[\(n)]; if(b){b.click(); return true} return false})()") { _, _ in }
+    }
+
+    func debugDoubleClick() {
+        guard !isEditing else { return }
+        webView.evaluateJavaScript("document.getElementById('content').dispatchEvent(new MouseEvent('dblclick',{bubbles:true,cancelable:true}))") { _, _ in }
+    }
+
     func debugState() -> [String: Any] {
         [
+            "toggleButtonTitle": toggleButtonTitle,
+            "text": doc?.text ?? "",
             "editing": isEditing,
             "dirty": doc?.isDocumentEdited ?? false,
             "conflictVisible": !conflictBar.isHidden,

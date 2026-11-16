@@ -56,7 +56,12 @@ enum DebugHooks {
                                                for: .saveAsOperation) { _ in }
             return
         }
+        if cmd.hasPrefix("clickCheckbox:"), let n = Int(cmd.dropFirst("clickCheckbox:".count)) {
+            c.debugClickCheckbox(n)
+            return
+        }
         switch cmd {
+        case "dblclick": c.debugDoubleClick()
         case "toggleEdit": c.toggleEditMode(nil)
         case "save": (c.document as? NSDocument)?.save(nil as Any?)
         case "keepMine": (c.document as? MarkdownDocument)?.keepMine()

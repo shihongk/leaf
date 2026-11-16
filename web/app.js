@@ -34,7 +34,26 @@
         return ''; // markdown-it escapes it
       }
     });
-    if (window.markdownitTaskLists) m.use(window.markdownitTaskLists, { enabled: false });
+    if (window.markdownitTaskLists) {
+      m.use(window.markdownitTaskLists, { enabled: true }); // enabled: no `disabled` attribute
+      // Tag each task checkbox with its 0-based SOURCE line (token.map, mapped back through
+      // env.lineMap when #math regions were swapped for placeholders).
+      m.core.ruler.after('github-task-lists', 'leaf_task_lines', function (state) {
+        var map = state.env && state.env.lineMap;
+        var toks = state.tokens;
+        for (var i = 0; i + 2 < toks.length; i++) {
+          var li = toks[i];
+          if (li.type !== 'list_item_open' || !li.map || (li.attrGet('class') || '').indexOf('task-list-item') < 0) continue;
+          var kids = toks[i + 2].children;
+          var box = kids && kids[0];
+          if (!box || box.type !== 'html_inline' || box.content.indexOf('<input class="task-list-item-checkbox"') !== 0) continue;
+          var line = map ? map[li.map[0]] : li.map[0];
+          box.content = (typeof line === 'number' && line >= 0)
+            ? box.content.replace('<input ', '<input data-line="' + line + '" ')
+            : box.content.replace('<input ', '<input disabled ');
+        }
+      });
+    }
 
     // Wide tables scroll inside their own box.
     m.renderer.rules.table_open = function () { return '<div class="table-wrap"><table>\n'; };
@@ -162,12 +181,14 @@
   function renderHTML(text) {
     var regions = [];
     var source = text;
+    var env = {};
     if (window.LeafMath) {
       var ex = LeafMath.extractRegions(text, function (k) { return 'LEAFMATHREGION' + k + 'X'; });
       source = ex.source;
       regions = ex.regions;
+      env.lineMap = ex.lineMap;
     }
-    var html = md.render(source);
+    var html = md.render(source, env);
     if (regions.length) {
       html = html.replace(PLACEHOLDER_RE, function (all, k) {
         var r = regions[Number(k)];
@@ -211,6 +232,28 @@
       var el = document.getElementById(id);
       if (el) el.scrollIntoView({ block: 'start' });
     }
+  });
+
+  function post(msg) {
+    try { window.webkit.messageHandlers.leaf.postMessage(msg); } catch (e) { /* not hosted by Leaf */ }
+  }
+
+  // Click a task checkbox: Swift flips the [ ]/[x] in the source and re-renders.
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.matches || !t.matches('input.task-list-item-checkbox[data-line]')) return;
+    ev.preventDefault(); // the re-render shows the new state
+    post({ type: 'toggleTask', line: Number(t.getAttribute('data-line')) });
+  });
+
+  // Double-click anywhere else on the page switches to the editor.
+  document.addEventListener('dblclick', function (ev) {
+    var t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest('a, input, label')) return;
+    // Scrollbars of code blocks / tables report the scroller itself as the target.
+    if (t.classList.contains('table-wrap') || t.tagName === 'PRE') return;
+    post({ type: 'dblclick' });
   });
 
   window.leaf = {

@@ -298,13 +298,15 @@
    * paragraph. (```math fences stay in the source; the markdown renderer handles them.)
    */
   function extractRegions(text, placeholder) {
-    var out = [], regions = [];
+    var out = [], regions = [], lineMap = [];
     scan(text.split('\n'), function (kind, start, lines) {
       if (kind !== 'math') return;
       regions.push(lines);
       out.push('', placeholder(regions.length - 1), '');
-    }, function (i, line) { out.push(line); });
-    return { source: out.join('\n'), regions: regions };
+      lineMap.push(-1, -1, -1);
+    }, function (i, line) { out.push(line); lineMap.push(i); });
+    // lineMap[k] = 0-based line of `text` that line k of `source` came from (-1 for placeholders).
+    return { source: out.join('\n'), regions: regions, lineMap: lineMap };
   }
 
   /**
