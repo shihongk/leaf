@@ -105,6 +105,15 @@ final class LeafTextView: NSTextView, NSTextStorageDelegate {
     /// Rates passed to the math engine (same payload the reading view gets).
     var ratesProvider: () -> [String: Any]? = { nil }
 
+    /// Called after pasting into a completely empty note, so the window can show it formatted.
+    var onPasteIntoEmpty: (() -> Void)?
+
+    override func paste(_ sender: Any?) {
+        let wasEmpty = string.isEmpty
+        super.paste(sender)
+        if wasEmpty && !string.isEmpty { DispatchQueue.main.async { [weak self] in self?.onPasteIntoEmpty?() } }
+    }
+
     private var debounce: DispatchWorkItem?
     private var generation = 0
     private var lineCount = 1

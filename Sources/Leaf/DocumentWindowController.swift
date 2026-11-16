@@ -131,6 +131,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         textView.isIncrementalSearchingEnabled = true
         textView.textContainerInset = NSSize(width: 24, height: 20)
         textView.delegate = self
+        textView.onPasteIntoEmpty = { [weak self] in
+            // Pasting into a blank note shows it formatted right away; Cmd+E returns to editing.
+            if let self, self.isEditing { self.toggleEditMode(nil) }
+        }
         // Soft wrap to the window width; never inserts line breaks into the file.
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
@@ -416,6 +420,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
     }
 
     // MARK: Debug (LEAF_DEBUG=1 only)
+
+    func debugPaste() {
+        guard isEditing else { return }
+        window?.makeFirstResponder(textView)
+        textView.paste(nil)
+    }
 
     func debugInsert(_ text: String) {
         guard isEditing else { return }

@@ -38,6 +38,12 @@ enum DebugHooks {
         if cmd == "settings" { (NSApp.delegate as? AppDelegate)?.showSettings(nil); return }
         if cmd == "new" { NSDocumentController.shared.newDocument(nil); return }
         guard let c = front else { return }
+        if cmd.hasPrefix("pasteText:") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(String(cmd.dropFirst("pasteText:".count)).replacingOccurrences(of: "\\n", with: "\n"), forType: .string)
+            c.debugPaste()
+            return
+        }
         if cmd.hasPrefix("insert:") {
             // "\n" and "\t" escapes become newline / tab; "\\" is a literal backslash.
             c.debugInsert(unescape(String(cmd.dropFirst("insert:".count))))
