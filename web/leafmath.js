@@ -264,9 +264,9 @@
         if (onLine) onLine(i, line, true);
         continue;
       }
-      if (line.trim().toLowerCase() === '#math') {
+      if (/^#\s*math$/i.test(line.trim())) {
         var j = i + 1;
-        while (j < lines.length && lines[j].trim().toLowerCase() !== '#endmath') j++;
+        while (j < lines.length && !/^#\s*endmath$/i.test(lines[j].trim())) j++;
         onRegion('math', i + 1, lines.slice(i + 1, j), Math.min(j, lines.length - 1));
         i = j; // skip the #endmath line too (or run to EOF)
         continue;

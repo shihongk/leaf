@@ -139,6 +139,9 @@ function docAnswers(text, engine = withRates) { return LeafMath.documentAnswers(
 test('documentAnswers: #math region, answers by source line', () => {
   assert.deepStrictEqual(docAnswers('# Note\n#math\nrent: 1800\nrent * 12 ='), [{ line: 3, answer: '21,600' }]);
 });
+test('documentAnswers: "# math" / "# endmath" with a space also work; other headings do not', () => {
+  assert.deepStrictEqual(docAnswers('# Math\nrent: 1800\nrent * 12 =\n# endmath\n5 + 5 =\n\n# Maths notes\n1 + 1 ='), [{ line: 2, answer: '21,600' }]);
+});
 test('documentAnswers: = lines outside regions get nothing', () => {
   assert.deepStrictEqual(docAnswers('Cost: 5 + 5 =\n#math\n1 + 1 =\n#endmath\n2 + 2 ='), [{ line: 2, answer: '2' }]);
 });
