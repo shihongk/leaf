@@ -3,7 +3,7 @@
 A small, fast Markdown reader for macOS. Open a `.md` file and see it properly formatted. Lines inside a `#math` region are calculated inline, Antinote-style.
 
 - GitHub-style reading view, automatic light/dark, syntax-highlighted code, tables, task lists
-- `Cmd+E` toggles a plain-text editor, `Cmd+S` saves
+- `Cmd+N` starts a blank note, `Cmd+E` toggles a plain-text editor, `Cmd+S` saves
 - Reloads automatically when the file changes on disk
 - Raw HTML and scripts in files are never run
 - Works offline (all libraries are bundled)

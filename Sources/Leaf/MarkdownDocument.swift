@@ -19,7 +19,12 @@ final class MarkdownDocument: NSDocument {
     override class var preservesVersions: Bool { false }
 
     override func makeWindowControllers() {
-        addWindowController(DocumentWindowController())
+        let wc = DocumentWindowController()
+        addWindowController(wc)
+        // A brand-new blank note opens straight into the editor, ready for typing or pasting.
+        if fileURL == nil && text.isEmpty {
+            DispatchQueue.main.async { if !wc.isEditing { wc.toggleEditMode(nil) } }
+        }
     }
 
     override var fileURL: URL? {

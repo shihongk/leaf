@@ -72,6 +72,7 @@ enum MainMenu {
         main.addItem(fileItem)
         let file = NSMenu(title: "File")
         fileItem.submenu = file
+        file.addItem(withTitle: "New", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
         file.addItem(withTitle: "Open…", action: #selector(NSDocumentController.openDocument(_:)), keyEquivalent: "o")
         let recentItem = file.addItem(withTitle: "Open Recent", action: nil, keyEquivalent: "")
         let recent = NSMenu(title: "Open Recent")
