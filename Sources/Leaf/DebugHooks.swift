@@ -18,12 +18,36 @@ enum DebugHooks {
         NSApp.orderedWindows.lazy.compactMap { $0.windowController as? DocumentWindowController }.first
     }
 
+    private static func unescape(_ s: String) -> String {
+        var out = ""
+        var it = s.makeIterator()
+        while let ch = it.next() {
+            guard ch == "\\" else { out.append(ch); continue }
+            switch it.next() {
+            case "n": out.append("\n")
+            case "t": out.append("\t")
+            case "\\": out.append("\\")
+            case let other?: out.append("\\"); out.append(other)
+            case nil: out.append("\\")
+            }
+        }
+        return out
+    }
+
     private static func run(_ cmd: String) {
         if cmd == "settings" { (NSApp.delegate as? AppDelegate)?.showSettings(nil); return }
         if cmd == "new" { NSDocumentController.shared.newDocument(nil); return }
         guard let c = front else { return }
         if cmd.hasPrefix("insert:") {
-            c.debugInsert(String(cmd.dropFirst("insert:".count)))
+            // "\n" and "\t" escapes become newline / tab; "\\" is a literal backslash.
+            c.debugInsert(unescape(String(cmd.dropFirst("insert:".count))))
+            return
+        }
+        if cmd.hasPrefix("saveTo:") {
+            // Save the front document to a path without a panel (test-only).
+            let url = URL(fileURLWithPath: String(cmd.dropFirst("saveTo:".count)))
+            (c.document as? NSDocument)?.save(to: url, ofType: "net.daringfireball.markdown",
+                                               for: .saveAsOperation) { _ in }
             return
         }
         switch cmd {

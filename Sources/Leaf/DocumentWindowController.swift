@@ -4,7 +4,7 @@ import WebKit
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextViewDelegate, NSSearchFieldDelegate {
     private var webView: WKWebView!
     private var editScroll: NSScrollView!
-    private var textView: NSTextView!
+    private var textView: LeafTextView!
     private var conflictBar: NSView!
     private var findBar: NSView!
     private var findField: NSSearchField!
@@ -38,6 +38,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         })
         observers.append(nc.addObserver(forName: RatesManager.updated, object: nil, queue: .main) { [weak self] _ in
             self?.render()
+            self?.textView.scheduleRecompute(delay: 0)
         })
     }
 
@@ -65,11 +66,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
         webView.allowsMagnification = false
         webView.pageZoom = Settings.zoom
 
-        editScroll = NSTextView.scrollableTextView()
+        (editScroll, textView) = LeafTextView.makeScrollable()
         editScroll.hasVerticalScroller = true
         editScroll.hasHorizontalScroller = false
         editScroll.drawsBackground = true
-        textView = (editScroll.documentView as! NSTextView)
+        textView.ratesProvider = { RatesManager.shared.payload }
         configureTextView()
         editScroll.isHidden = true
 
@@ -434,6 +435,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, WKNa
             "editorTextLength": (textView.string as NSString).length,
             "zoom": Double(webView.pageZoom),
             "editorScrollY": Double(editScroll.contentView.bounds.origin.y),
+            // Live editor answers, keyed by 1-based line number.
+            "liveAnswers": Dictionary(uniqueKeysWithValues: textView.liveAnswers.map { (String($0.key + 1), $0.value) }),
         ]
     }
 }

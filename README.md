@@ -42,6 +42,7 @@ $100 in usd =            ($ always means SGD)
 ```
 
 - A line ending in `=` shows its answer. Answers are display-only and never written to the file.
+- Answers also update live in the editor (`Cmd+E`) as you type, shown as green pills after each line.
 - `name: value` defines a variable. A label before the colon becomes a variable too (`Lunch` → `lunch`).
 - Currencies use 3-letter codes (`usd`, `eur`, `jpy`, …). Rates are daily European Central Bank rates from [Frankfurter](https://frankfurter.dev), cached for offline use.
 - A line that can't be worked out simply shows nothing.

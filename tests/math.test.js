@@ -134,5 +134,40 @@ test('doc without #math has no regions', () => {
   assert.strictEqual(LeafMath.extractRegions('Cost: 5 + 5 =', k => 'PH' + k).regions.length, 0);
 });
 
+// --- Whole-document answers (native editor) ---
+function docAnswers(text, engine = withRates) { return LeafMath.documentAnswers(engine, text); }
+test('documentAnswers: #math region, answers by source line', () => {
+  assert.deepStrictEqual(docAnswers('# Note\n#math\nrent: 1800\nrent * 12 ='), [{ line: 3, answer: '21,600' }]);
+});
+test('documentAnswers: = lines outside regions get nothing', () => {
+  assert.deepStrictEqual(docAnswers('Cost: 5 + 5 =\n#math\n1 + 1 =\n#endmath\n2 + 2 ='), [{ line: 2, answer: '2' }]);
+});
+test('documentAnswers: ```math fence', () => {
+  assert.deepStrictEqual(docAnswers('intro =\n```math\na: 2\na * 3 =\n```\n4 * 4 ='), [{ line: 3, answer: '6' }]);
+});
+test('documentAnswers: other fences and #math inside fences ignored', () => {
+  assert.deepStrictEqual(docAnswers('```js\n1 + 1 =\n```\n~~~\n#math\n2 + 2 =\n~~~'), []);
+});
+test('documentAnswers: unclosed ```math fence runs to EOF', () => {
+  assert.deepStrictEqual(docAnswers('```math\n3 * 3 ='), [{ line: 1, answer: '9' }]);
+});
+test('documentAnswers: two regions have separate scopes', () => {
+  assert.deepStrictEqual(docAnswers('#math\nx: 4\nx * 2 =\n#endmath\ntext\n#math\nx * 2 =\n5 ='),
+    [{ line: 2, answer: '8' }, { line: 7, answer: '5' }]);
+});
+test('documentAnswers: errors and empty doc show nothing', () => {
+  assert.deepStrictEqual(docAnswers('#math\nhello =\n1 / =\n'), []);
+  assert.deepStrictEqual(docAnswers(''), []);
+});
+test('documentAnswers matches evaluateRegion (same engine as reading view)', () => {
+  const region = 'hotel: 300 eur\nflight: $800\nhotel + flight =\ntotal =';
+  const viaRegion = answers(region);
+  const viaDoc = docAnswers('#math\n' + region);
+  assert.deepStrictEqual(viaDoc.map(a => a.answer), viaRegion.filter(a => a !== null));
+});
+test('documentAnswers: CRLF line endings', () => {
+  assert.deepStrictEqual(docAnswers('#math\r\n1 + 2 =\r\n'), [{ line: 1, answer: '3' }]);
+});
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

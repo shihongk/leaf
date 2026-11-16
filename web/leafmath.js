@@ -4,6 +4,7 @@
  *
  *   const engine = LeafMath.createEngine(mathjs, rates)   // rates: {date, rates:{USD:1.1,...}} base EUR, or null
  *   const region = engine.evaluateRegion(lines)            // -> {lines:[{text, kind, answer}], usedCurrency, ratesDate}
+ *   LeafMath.documentAnswers(engine, markdownText)         // -> [{line, answer}] for the whole document
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -236,44 +237,82 @@
   }
 
   /**
-   * Split markdown source into normal markdown and #math regions. Code fences are respected
-   * (a "#math" line inside a code block is just code). Returns {source, regions} where each
-   * region's lines are replaced in `source` by a standalone placeholder paragraph.
+   * Scan markdown source line by line for math regions. Code fences are respected (a "#math"
+   * line inside a code block is just code); a fence whose info string starts with "math" is
+   * itself a math region. Calls onLine(i, line, inFence) for every line outside #math regions
+   * and onRegion(kind, start, lines, end) for each region, where `start` is the source line
+   * index of the region's first content line and `end` the index of its last source line
+   * (the #endmath / closing fence, or the last line of the file).
    */
-  function extractRegions(text, placeholder) {
-    var lines = text.split('\n');
-    var out = [], regions = [];
+  function scan(lines, onRegion, onLine) {
     var fence = null;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (fence) {
-        out.push(line);
         var close = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line);
-        if (close && close[1][0] === fence.ch && close[1].length >= fence.len) fence = null;
+        if (close && close[1][0] === fence.ch && close[1].length >= fence.len) {
+          if (fence.math) onRegion('fence', fence.start, lines.slice(fence.start, i), i);
+          fence = null;
+        }
+        if (onLine) onLine(i, line, true);
         continue;
       }
       var open = /^ {0,3}(`{3,}|~{3,})/.exec(line);
       if (open && !(open[1][0] === '`' && line.slice(open[0].length).indexOf('`') >= 0)) {
-        fence = { ch: open[1][0], len: open[1].length };
-        out.push(line);
+        var info = line.slice(open[0].length).trim().split(/\s+/)[0].toLowerCase();
+        fence = { ch: open[1][0], len: open[1].length, math: info === 'math', start: i + 1 };
+        if (onLine) onLine(i, line, true);
         continue;
       }
       if (line.trim().toLowerCase() === '#math') {
         var j = i + 1;
         while (j < lines.length && lines[j].trim().toLowerCase() !== '#endmath') j++;
-        regions.push(lines.slice(i + 1, j));
-        out.push('', placeholder(regions.length - 1), '');
+        onRegion('math', i + 1, lines.slice(i + 1, j), Math.min(j, lines.length - 1));
         i = j; // skip the #endmath line too (or run to EOF)
         continue;
       }
-      out.push(line);
+      if (onLine) onLine(i, line, false);
     }
+    // An unclosed fence runs to the end of the document.
+    if (fence && fence.math) onRegion('fence', fence.start, lines.slice(fence.start), lines.length - 1);
+  }
+
+  /**
+   * Split markdown source into normal markdown and #math regions. Returns {source, regions}
+   * where each #math region's lines are replaced in `source` by a standalone placeholder
+   * paragraph. (```math fences stay in the source; the markdown renderer handles them.)
+   */
+  function extractRegions(text, placeholder) {
+    var out = [], regions = [];
+    scan(text.split('\n'), function (kind, start, lines) {
+      if (kind !== 'math') return;
+      regions.push(lines);
+      out.push('', placeholder(regions.length - 1), '');
+    }, function (i, line) { out.push(line); });
     return { source: out.join('\n'), regions: regions };
+  }
+
+  /**
+   * Answers for a whole document, keyed by source line: [{line, answer}] with 0-based line
+   * indices into text.split('\n'). Only lines inside #math regions and ```math fences can have
+   * answers; lines that can't be evaluated are omitted. Used by the native editor.
+   */
+  function documentAnswers(engine, text) {
+    var out = [];
+    scan(String(text).split('\n'), function (kind, start, lines) {
+      var res;
+      try { res = engine.evaluateRegion(lines); } catch (e) { return; }
+      res.lines.forEach(function (l, k) {
+        if (l.answer !== null && l.answer !== undefined) out.push({ line: start + k, answer: l.answer });
+      });
+    });
+    return out;
   }
 
   return {
     createEngine: createEngine,
     extractRegions: extractRegions,
+    documentAnswers: documentAnswers,
     formatNumber: formatNumber,
     formatCurrency: formatCurrency,
     labelToVar: labelToVar
