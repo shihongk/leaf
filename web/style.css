@@ -11,7 +11,7 @@
   --link: #1f7a37;
   --row-alt: #eef2ef;
   --table-border: #9aa5ae;
-  --th-bg: #2999452e;
+  --th-bg: #299945;
   --pill-bg: #2999451f;
   --pill-fg: #1a6b30;
   --pill-border: #29994555;
@@ -30,7 +30,7 @@
     --link: #56c873;
     --row-alt: #ffffff12;
     --table-border: #7a848f;
-    --th-bg: #3fb65c3d;
+    --th-bg: #299945;
     --pill-bg: #3fb65c29;
     --pill-fg: #7ddc95;
     --pill-border: #3fb65c66;
@@ -146,7 +146,7 @@ body.wrap-code .markdown-body pre { white-space: pre-wrap; overflow-wrap: anywhe
   border: 2px solid var(--table-border);
 }
 .markdown-body table td { max-width: 40em; overflow-wrap: anywhere; }
-.markdown-body table th { font-weight: 600; background: var(--th-bg); }
+.markdown-body table th { font-weight: 600; background: var(--th-bg); color: #fff; }
 .markdown-body table tr:nth-child(2n) { background: var(--row-alt); }
 
 /* Math regions */
