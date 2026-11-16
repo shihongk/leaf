@@ -206,19 +206,27 @@
         var name = label !== null ? labelToVar(label) : null;
 
         if (!wantsAnswer) {
-          if (label !== null) {
-            // "rent: 1800" defines rent silently.
-            if (!body.trim()) return { text: line, kind: 'text', answer: null };
-            var r = run(body);
-            if (r) define(name, r);
-            return { text: line, kind: 'text', answer: null };
-          }
-          var asg = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/.exec(body);
+          if (label !== null && !body.trim()) return { text: line, kind: 'text', answer: null };
+          var asg = label === null ? /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/.exec(body) : null;
           if (asg) {
             var r2 = run(asg[2]);
             if (r2) define(asg[1], r2);
+            return { text: line, kind: 'text', answer: null };
           }
-          return { text: line, kind: 'text', answer: null };
+          // No trailing "=": still answer real calculations ("12 + 8", "rent * 12", "5 km in miles",
+          // or a bare known variable), but stay silent for plain values ("rent: 1800") and prose.
+          var b = body.trim();
+          var isCalc = /^[A-Za-z_][A-Za-z0-9_]*$/.test(b)
+            ? (scope.has(b) || (b === 'ans' && ans !== undefined) || (b === 'total' && block.length > 0))
+            : (/[\w)%]\s*[+\-*\/^]\s*[\w($.-]/.test(b) || /[\w)%]\s+(in|to|of)\s+[\w($]/i.test(b));
+          if (!isCalc) {
+            if (label !== null) {
+              // "rent: 1800" defines rent silently.
+              var r = run(body);
+              if (r) define(name, r);
+            }
+            return { text: line, kind: 'text', answer: null };
+          }
         }
 
         var res = run(body);

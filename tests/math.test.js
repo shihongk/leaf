@@ -25,7 +25,18 @@ function last(text, engine) { const a = answers(text, engine); return a[a.length
 
 // --- Basic line rules ---
 test('line ending in = shows answer', () => assert.strictEqual(last('12 + 8 ='), '20'));
-test('line without = shows nothing', () => assert.strictEqual(last('12 + 8'), null));
+test('calculation without = still shows its answer', () => assert.strictEqual(last('12 + 8'), '20'));
+test('no =: variable definition stays silent', () => assert.strictEqual(last('rent: 1800'), null));
+test('no =: variable then use', () => assert.strictEqual(last('rent: 1800\nrent * 12'), '21,600'));
+test('no =: labelled calculation shows and defines', () => assert.strictEqual(last('Lunch: 12 + 8\nlunch * 2'), '40'));
+test('no =: bare known variable shows its value', () => assert.strictEqual(last('rent: 1800\nrent'), '1,800'));
+test('no =: bare number shows nothing', () => assert.strictEqual(last('1800'), null));
+test('no =: prose shows nothing', () => assert.strictEqual(last('Buy milk and follow-up with Sam'), null));
+test('no =: unknown single word shows nothing', () => assert.strictEqual(last('groceries'), null));
+test('no =: unit conversion', () => assert.strictEqual(last('3 hours in minutes'), last('3 hours in minutes =')));
+test('no =: percent of', () => assert.strictEqual(last('20% of 450'), '90'));
+test('no =: total counts answers without =', () => assert.strictEqual(last('10 + 5\n2 * 10\ntotal'), '35'));
+test('no =: currency', () => assert.strictEqual(last('$100 in usd'), last('100 sgd in usd =')));
 test('label: Lunch: 12 + 8 = -> 20', () => assert.strictEqual(last('Lunch: 12 + 8 ='), '20'));
 test('label becomes variable', () => assert.strictEqual(last('Lunch: 12 + 8 =\nlunch * 2 ='), '40'));
 test('multi-word label variable', () => assert.strictEqual(last('Monthly rent: 1800 =\nmonthly_rent * 12 ='), '21,600'));
