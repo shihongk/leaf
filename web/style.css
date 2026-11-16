@@ -7,11 +7,14 @@
   --border-muted: #d1d9e0b3;
   --code-bg: #818b981f;
   --pre-bg: #f6f8fa;
-  --link: #0969da;
-  --row-alt: #f6f8fa;
-  --pill-bg: #0969da14;
-  --pill-fg: #0550ae;
-  --pill-border: #0969da33;
+  --accent: #299945;
+  --link: #1f7a37;
+  --row-alt: #eef2ef;
+  --table-border: #9aa5ae;
+  --th-bg: #2999452e;
+  --pill-bg: #2999451f;
+  --pill-fg: #1a6b30;
+  --pill-border: #29994555;
   --mark: #fff8c5;
   color-scheme: light dark;
 }
@@ -23,11 +26,14 @@
     --border-muted: #3d444db3;
     --code-bg: #656c7633;
     --pre-bg: #151b23;
-    --link: #4493f8;
-    --row-alt: #151b23;
-    --pill-bg: #4493f81f;
-    --pill-fg: #79c0ff;
-    --pill-border: #4493f840;
+    --accent: #3fb65c;
+    --link: #56c873;
+    --row-alt: #ffffff12;
+    --table-border: #7a848f;
+    --th-bg: #3fb65c3d;
+    --pill-bg: #3fb65c29;
+    --pill-fg: #7ddc95;
+    --pill-border: #3fb65c66;
     --mark: #bb800926;
   }
 }
@@ -87,7 +93,7 @@ body {
 
 /* Task lists */
 .markdown-body .task-list-item { list-style-type: none; }
-.markdown-body .task-list-item input { margin: 0 .3em .25em -1.4em; vertical-align: middle; }
+.markdown-body .task-list-item input { accent-color: var(--accent); margin: 0 .3em .25em -1.4em; vertical-align: middle; }
 .markdown-body .contains-task-list { padding-left: 2em; }
 
 /* Code */
@@ -136,11 +142,11 @@ body.wrap-code .markdown-body pre { white-space: pre-wrap; overflow-wrap: anywhe
   overflow-wrap: normal;
 }
 .markdown-body table th, .markdown-body table td {
-  padding: 6px 13px;
-  border: 1px solid var(--border);
+  padding: 7px 13px;
+  border: 2px solid var(--table-border);
 }
 .markdown-body table td { max-width: 40em; overflow-wrap: anywhere; }
-.markdown-body table th { font-weight: 600; }
+.markdown-body table th { font-weight: 600; background: var(--th-bg); border-bottom: 3px solid var(--accent); }
 .markdown-body table tr:nth-child(2n) { background: var(--row-alt); }
 
 /* Math regions */
