@@ -12,7 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     // Leaf is a reader: never open an empty untitled document on launch.
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+    // Launching Leaf on its own opens a blank note; opening a file does not.
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { true }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
