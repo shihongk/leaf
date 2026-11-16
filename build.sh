@@ -21,9 +21,14 @@ codesign --force --deep --sign - "$APP"
 DEST="$HOME/Applications"
 mkdir -p "$DEST"
 if pgrep -x Leaf >/dev/null; then
-    osascript -e 'tell application id "local.leaf.Leaf" to quit' >/dev/null 2>&1 || true
+    # Ask politely; never force-kill, so unsaved edits are not lost.
+    (osascript -e 'tell application id "local.leaf.Leaf" to quit' >/dev/null 2>&1 &)
     for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x Leaf >/dev/null || break; sleep 0.3; done
-    pkill -x Leaf 2>/dev/null || true
+    if pgrep -x Leaf >/dev/null; then
+        echo "Leaf is still running (probably unsaved edits). Save or close them, quit Leaf, then run ./build.sh again." >&2
+        echo "Built $APP but did NOT install it." >&2
+        exit 1
+    fi
 fi
 rm -rf "$DEST/Leaf.app"
 cp -R "$APP" "$DEST/Leaf.app"
