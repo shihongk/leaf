@@ -146,7 +146,7 @@ body.wrap-code .markdown-body pre { white-space: pre-wrap; overflow-wrap: anywhe
   border: 2px solid var(--table-border);
 }
 .markdown-body table td { max-width: 40em; overflow-wrap: anywhere; }
-.markdown-body table th { font-weight: 600; background: var(--th-bg); border-bottom: 3px solid var(--accent); }
+.markdown-body table th { font-weight: 600; background: var(--th-bg); }
 .markdown-body table tr:nth-child(2n) { background: var(--row-alt); }
 
 /* Math regions */
