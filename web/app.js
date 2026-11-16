@@ -106,7 +106,8 @@
           '<span class="math-tail">' + escapeHTML(text.slice(cut)) +
           '<span class="math-ans">' + escapeHTML(l.answer) + '</span></span></div>';
       } else {
-        html += '<div class="' + cls + '">' + escapeHTML(l.text) + '</div>';
+        var shown = l.kind === 'heading' ? l.text.replace(/^\s*#{1,6}\s+/, '') : l.text;
+        html += '<div class="' + cls + '">' + escapeHTML(shown) + '</div>';
       }
     });
     html += '</div>';

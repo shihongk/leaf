@@ -215,7 +215,7 @@
           var asg = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/.exec(body);
           if (asg) {
             var r2 = run(asg[2]);
-            if (r2) define(asg[1].toLowerCase() === asg[1] ? asg[1] : asg[1], r2);
+            if (r2) define(asg[1], r2);
           }
           return { text: line, kind: 'text', answer: null };
         }
